@@ -1,0 +1,29 @@
+path:
+  data:
+      all_images: "data/images"
+      rating_record: "data/all_records.csv"
+  statistics: "statistics"
+
+# Decide which attr to do with
+# attributes: [ 'hp', 'pa', 'ma', 'sp', 'cr' ]
+attributes: [ 'hp' ]
+
+input:
+  input_size:
+    width: 3
+    height: 3
+  color: 'RGB' # 'RGB' or 'Grayscale'
+
+train:
+  batch_size: 100 # Only integer now. TODO: "all" or integer
+  epoch: 1
+  K_fold_number: 5
+  random_crop:
+    use_random_crop: 'false' # use_random_crop: 'true' means True; otherwise, False.
+    min_size:
+      width: 178
+      height: 218
+
+confusion_matrix:
+  normalize: "true" # "true" means True; otherwise, False.
+  round_precision: 2
