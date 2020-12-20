@@ -1,29 +1,63 @@
 path:
   data:
-      all_images: "data/images"
-      rating_record: "data/all_records.csv"
+    all_images: "data/images"
+    rating_record: "data/all_records.csv"
   statistics: "statistics"
 
 # Decide which attr to do with
-# attributes: [ 'hp', 'pa', 'ma', 'sp', 'cr' ]
+#attributes: [ 'hp', 'pa', 'ma', 'sp', 'cr' ]
 attributes: [ 'hp' ]
 
 input:
   input_size:
-    width: 3
-    height: 3
+    width: 50
+    height: 60
   color: 'RGB' # 'RGB' or 'Grayscale'
+  edges: # If use edges, the img will be turned to 'RGB'
+    use_edges: 'false' # 'true' means True; otherwise, False
+    threshold1: 100
+    threshold2: 50
 
 train:
+  rater: 'liao' # rater's name or 'all'
   batch_size: 100 # Only integer now. TODO: "all" or integer
-  epoch: 1
-  K_fold_number: 5
+  epoch: 2
+  validation: 'holdout' # 'K_fold' or 'holdout' or 'none' (P.S. Now 'none' is unavailable.)
+  # K_fold_number:
+  #     - 'None': No validation
+  K_fold_number: 5 # If using K_fold, this number must >= 2
+  holdout_validation_size: 0.2 # >0, <1
   random_crop:
     use_random_crop: 'false' # use_random_crop: 'true' means True; otherwise, False.
-    min_size:
-      width: 178
-      height: 218
+    resize:
+      width: 60
+      height: 72
 
 confusion_matrix:
   normalize: "true" # "true" means True; otherwise, False.
-  round_precision: 2
+  round_precision: ".2f"
+
+#model:
+#  # type:
+#  #     - 'random_forest'
+#  type: 'random_forest_clf'
+#  # Model settings
+#  random_forest_clf:
+#    # Read sklearn rand. forest clf doc for mor info.
+#    n_estimators: 100 # Num of trees in the forest
+#    criterion: 'gini' # Function to measure quality. 'gini' or 'entropy'
+#    max_depth: 999999 # int
+#    min_samples_split: 2
+#    min_samples_leaf: 1
+#    # max_features: None
+#    #max_leaf_nodes: None
+#    verbose: 0
+#    bootstrap: True
+#    warm_start: True # Use previous fit or fit a whole new forest
+#    n_jobs: -1
+#    # random_state: 2
+#    # max_samples: None
+
+
+
+
