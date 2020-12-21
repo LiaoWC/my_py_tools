@@ -67,6 +67,17 @@ class ValidationSetting:
         self.holdout_size = holdout_size
 
 
+#######################
+
+def whether_flatten_and_flatten(x):
+    whether_flatten_str = YAML('config.yaml').get_data()['whether_flatten']
+    whether = True if whether_flatten_str == 'true' else False
+    if whether:
+        return x.flatten()
+    else:
+        return x
+
+
 ##############################################################################
 
 def get_img_data_from_filename(filename: str,
@@ -112,9 +123,9 @@ def get_img_data_from_filename(filename: str,
 
     # Edges
     if edges_setting.use is True:
-        get_edges(pil_img=img,
-                  threshold1=edges_setting.threshold1,
-                  threshold2=edges_setting.threshold2)
+        img = get_edges(pil_img=img,
+                        threshold1=edges_setting.threshold1,
+                        threshold2=edges_setting.threshold2)
 
     #################################
     # Preprocessing only for training
@@ -261,7 +272,8 @@ def simply_train(model,
                 #####################################
                 # Put batch data in the current batch
                 #####################################
-                x_batch_data.append(np.array(img).flatten())  # Option TODO: custom img arr functions setting
+                x_batch_data.append(
+                    whether_flatten_and_flatten(np.array(img)))  # Option TODO: custom img arr functions setting
                 y_batch_data.append(y_train[idx])
             ####################################
             # Make the batch data in numpy array
@@ -287,7 +299,7 @@ def simply_train(model,
         # Validation
         ############
         if validation is True:
-            y_pred = model.predict(np.array([x.flatten() for x in x_test]))
+            y_pred = model.predict(np.array([whether_flatten_and_flatten(x) for x in x_test]))
             accuracy = accuracy_score(y_true=y_test, y_pred=y_pred)
             last_accuracy_score = accuracy
             last_y_pred = y_pred
@@ -749,8 +761,8 @@ def read_config_and_train(model, img_dir):
 class MyModel:
     def __init__(self, config_path: str, model=None, model_path_to_load=None):
         if isinstance(model_path_to_load, str):
-            self.model = self.load_sklearn_model(file_path=model_path_to_load,
-                                                 set_directly_and_not_return=False)
+            self.model = self.load_model(file_path=model_path_to_load,
+                                         set_directly_and_not_return=False)
         else:
             self.model = model
         self.config_path = config_path
@@ -782,7 +794,7 @@ class MyModel:
         #
         config = YAML(yaml_path=self.config_path).get_data()
         target_width_height = (config['input']['input_size']['width'], config['input']['input_size']['height'])
-        edges_setting = EdgesSetting(use=True if config['input']['edges']['use_edges'] else False,
+        edges_setting = EdgesSetting(use=True if config['input']['edges']['use_edges'] == 'true' else False,
                                      threshold1=config['input']['edges']['threshold1'],
                                      threshold2=config['input']['edges']['threshold2'])
         pil_img_mode = config['input']['pil_img_mode']
@@ -803,7 +815,7 @@ class MyModel:
         # TODO: more preprocessing, not just flatten
         # Flatten
         # img_arr_flattened = np.array(sub_arr.flatten() for sub_arr in np.array(img))
-        return self.model.predict(np.array([np.array(img).flatten()]))
+        return self.model.predict(np.array([whether_flatten_and_flatten(np.array(img))]))[0]
 
 
 class RatingRecord:
