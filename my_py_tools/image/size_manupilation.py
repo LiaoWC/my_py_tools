@@ -2,6 +2,7 @@ from random import randint
 from PIL import Image
 import numpy as np
 from my_py_tools.image.img_format import get_img
+import copy
 
 
 # === Resize image with zero-padding ===
@@ -14,6 +15,8 @@ from my_py_tools.image.img_format import get_img
 #         and make original region in the center.
 #
 # Parameters:
+#     pil_img_mode:
+#         - 'none'
 #     input_mode & img:
 #         See the function "get_img(...)" in "img_format.py" file for more information.
 #     target_size: tuple (target_width, target_height):
@@ -21,16 +24,13 @@ from my_py_tools.image.img_format import get_img
 #     return_mode:
 #         - 'array'
 #         - 'PIL_Image'
-# P.S.
-#     - All images will be forced to be turned into RGB.
-def resize_with_zero_padding(img, input_mode='file_path',
+def resize_with_zero_padding(img,
+                             # pil_img_mode: str,
+                             input_mode='file_path',
                              target_size=(100, 100),
                              return_mode='array'):
     # Get img
     img = get_img(img=img, input_mode=input_mode, return_mode='PIL_Image')
-
-    # Convert into RGB
-    img = img.convert('RGB')
 
     # Fit width
     w, h = img.size

@@ -9,6 +9,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import itertools
 import os
 import yaml
 import my_py_tools
@@ -73,7 +74,8 @@ def get_img_data_from_filename(filename: str,
                                random_crop_setting: RandomCropSetting,
                                edges_setting: EdgesSetting,
                                pil_img_mode: str,
-                               return_mode: str):
+                               return_mode: str,
+                               train=True):
     """
     Given an image's file path, get its image data.
     The image is processed by PIL Image and numpy.
@@ -83,13 +85,17 @@ def get_img_data_from_filename(filename: str,
     :param edges_setting:
     :param pil_img_mode:
     :param return_mode: "PIL_Image"'" or "ndarray"
+    :param train:
     :return: If return_mod is "PIL_Image", return a PIL Image; if return_mod is "ndarray", return a numpy array.
     """
+    #######################
+    # General preprocessing
+    #######################
     # Open image
-    img = None  # Variable "img" will be in PIL Image format.
+    # Variable "img" will be in PIL Image format.
     if pil_img_mode != 'RGBA':
         # If mode isn't RGBA, remove transparency.
-        # Using cv2 to avoid PIL's warning message of turn RGBA into RGB
+        # Using cv2 to avoid warning message of turn RGBA into RGB from PIL
         img_arr = cv2.imread(filename=filename)
         img_arr = cv2.cvtColor(img_arr, cv2.COLOR_RGBA2RGB)
         img = Image.fromarray(img_arr)
@@ -104,25 +110,32 @@ def get_img_data_from_filename(filename: str,
                                    return_mode='PIL_Image')
     img = img.convert(mode=pil_img_mode)
 
-    # Random crop
-    if random_crop_setting.use is True:
-        img = random_crop(img=img,
-                          bbox_size=random_crop_setting.crop_width_height,
-                          input_mode='PIL_Image',
-                          min_size=random_crop_setting.crop_width_height,
-                          all_possible=False,
-                          return_mode='PIL_Image')
-
     # Edges
     if edges_setting.use is True:
         get_edges(pil_img=img,
                   threshold1=edges_setting.threshold1,
                   threshold2=edges_setting.threshold2)
 
-    # Image color format
+    #################################
+    # Preprocessing only for training
+    #################################
+    if train is True:
+        # Random crop
+        if random_crop_setting.use is True:
+            img = random_crop(img=img,
+                              bbox_size=random_crop_setting.crop_width_height,
+                              input_mode='PIL_Image',
+                              min_size=random_crop_setting.crop_width_height,
+                              all_possible=False,
+                              return_mode='PIL_Image')
+    ################
+    # PIL Image mode
+    ################
     img = img.convert(mode=pil_img_mode)
 
+    ###############
     # Done. Return.
+    ###############
     if return_mode == 'PIL_Image':
         return img
     elif return_mode == 'ndarray':
@@ -135,7 +148,8 @@ def get_images_data_from_filenames(filenames: np.ndarray,
                                    target_width_height: tuple,
                                    random_crop_setting: RandomCropSetting,
                                    edges_setting: EdgesSetting,
-                                   pil_img_mode: str) -> np.ndarray:
+                                   pil_img_mode: str,
+                                   train: bool) -> np.ndarray:
     """
 
     :param filenames: list
@@ -143,6 +157,7 @@ def get_images_data_from_filenames(filenames: np.ndarray,
     :param random_crop_setting:
     :param edges_setting:
     :param pil_img_mode:
+    :param train:
     :return: If filenames is list, return a list; if filenames is numpy array, return a numpy array.
     """
     return np.array([get_img_data_from_filename(filename=filename,
@@ -150,7 +165,8 @@ def get_images_data_from_filenames(filenames: np.ndarray,
                                                 random_crop_setting=random_crop_setting,
                                                 edges_setting=edges_setting,
                                                 pil_img_mode=pil_img_mode,
-                                                return_mode='ndarray') for filename in filenames])
+                                                return_mode='ndarray',
+                                                train=train) for filename in filenames])
 
 
 #
@@ -223,6 +239,11 @@ def simply_train(model,
             # Collect batch data
             ####################
             for cur_x_number in range(1, cur_iteration_batch_size + 1):  # From 1 to cur_iteration_batch_size
+                #######################
+                # Prevent too large idx
+                #######################
+                if cur_x_number > x_train_size:
+                    break
                 #####################################
                 # Get image data from image file path
                 #####################################
@@ -234,7 +255,8 @@ def simply_train(model,
                                                  random_crop_setting=random_crop_setting,
                                                  edges_setting=edges_setting,
                                                  pil_img_mode=pil_img_mode,
-                                                 return_mode='PIL_Image')
+                                                 return_mode='PIL_Image',
+                                                 train=True)
 
                 #####################################
                 # Put batch data in the current batch
@@ -318,12 +340,13 @@ def holdout_training(model,
     #########################################
     # Get x_test data in correct input format
     #########################################
-    x_filenames = np.array(x_filenames) if isinstance(x_filenames, list) else x_filenames
+    x_filenames_train = np.array(x_filenames_train) if isinstance(x_filenames, list) else x_filenames_train
     x_test = get_images_data_from_filenames(filenames=x_filenames_test,
                                             target_width_height=input_width_height,
                                             random_crop_setting=random_crop_setting,
                                             edges_setting=edges_setting,
-                                            pil_img_mode=pil_img_mode)
+                                            pil_img_mode=pil_img_mode,
+                                            train=False)
     #######
     # Train
     #######
@@ -353,7 +376,6 @@ def k_fold_training(model,
                     pil_img_mode: str,
                     random_crop_setting: RandomCropSetting,
                     edges_setting: EdgesSetting,
-                    formalize_cm=True,
                     only_return_best=True,
                     n_folds=3):
     """
@@ -367,7 +389,6 @@ def k_fold_training(model,
     :param pil_img_mode:
     :param random_crop_setting:
     :param edges_setting:
-    :param formalize_cm:
     :param n_folds:
     :param only_return_best:
     :return: If "only_return_best" is True, return best_model, cm_after_added, avg_accuracy;
@@ -376,7 +397,7 @@ def k_fold_training(model,
     ###############
     # Make k models
     ###############
-    k_models = [copy.deepcopy(model) for i in range(n_folds)]
+    k_models = list(itertools.repeat(copy.deepcopy(model), n_folds))
     k_model_accuracies = []
     #############
     # Make K_Fold
@@ -407,7 +428,8 @@ def k_fold_training(model,
                                                 target_width_height=input_width_height,
                                                 random_crop_setting=random_crop_setting,
                                                 edges_setting=edges_setting,
-                                                pil_img_mode=pil_img_mode)
+                                                pil_img_mode=pil_img_mode,
+                                                train=False)
         #######
         # Train
         #######
@@ -449,9 +471,7 @@ def k_fold_training(model,
     cm_after_added = total_confusion_matrices[0]
     for i in range(1, len(total_confusion_matrices)):
         cm_after_added = np.add(cm_after_added, total_confusion_matrices[i])
-    # Determine whether to formalize
-    if formalize_cm is True:
-        cm_after_added = cm_after_added / (np.linalg.norm(cm_after_added))
+
     ########
     # Return
     ########
@@ -562,9 +582,11 @@ def train_predicting_attr_score_by_filenames(model,
                                               pil_img_mode=pil_img_mode,
                                               random_crop_setting=random_crop_setting,
                                               edges_setting=edges_setting,
-                                              formalize_cm=formalize_cm,
                                               only_return_best=True,
                                               n_folds=valid_setting.k_fold_n_folds)
+        # Determine whether to formalize
+        if formalize_cm is True:
+            cm = cm / (np.linalg.norm(cm))
         return model, cm, accuracy
     elif valid_setting.method == 'holdout':
         model, cm, accuracy = holdout_training(model=model,
@@ -577,6 +599,9 @@ def train_predicting_attr_score_by_filenames(model,
                                                random_crop_setting=random_crop_setting,
                                                edges_setting=edges_setting,
                                                test_size=valid_setting.holdout_size)
+        # Determine whether to formalize
+        if formalize_cm is True:
+            cm = cm / (np.linalg.norm(cm))
         return model, cm, accuracy
     elif valid_setting.method == 'none':
         model = simply_train(model=model,
@@ -598,107 +623,6 @@ def train_predicting_attr_score_by_filenames(model,
 ##############################################################################
 # Only for this project functions
 ##############################################################################
-
-class MyModel:
-    def __init__(self, model):
-        self.model = model
-
-    def set_model(self, model):
-        self.model = model
-
-    def save_sklearn_model(self, model, file_path):
-        joblib.dump(self.model, filename=file_path)
-
-    def load_sklearn_model(self, file_path):
-        self.model = joblib.load(filename=file_path)
-
-
-class RatingRecord:
-    """
-    """
-    ALL_ATTRS = ['hp', 'pa', 'ma', 'sp', 'cr']
-
-    def __init__(self, record_filename, img_dir):
-        """
-        Public members:
-            - record_filename
-            - df_all_record: A Pandas Dataframe
-            - df_attrs: A dict of Pandas Dataframes (key is attribute; value is dataframe.)
-
-        :param record_filename:
-        """
-        self.record_filename = record_filename
-        self.img_dir = img_dir
-        self.df_all_record = self.read_csv_and_add_img_dir_as_prefix()  # Pandas Dataframe
-        self.df_attrs = {attr: self.df_all_record.filter(['name', 'image', attr]) for attr in RatingRecord.ALL_ATTRS}
-
-    def read_csv_and_add_img_dir_as_prefix(self):
-        # Read csv
-        df = pd.read_csv(self.record_filename)
-        # Add prefix to img filename to make completed filename
-        for idx in df.index:
-            df.at[idx, 'image'] = os.path.join(self.img_dir, df.at[idx, 'image'])
-        return df
-
-    def plot_how_many_images_each_rater_has_rated(self):
-        """
-        Plot how many images each rater has rated
-
-        :return:
-        """
-        rater_to_num = self.df_all_record.groupby('name').size()
-        plot_horizontal_bar(rater_to_num.values,
-                            rater_to_num.index.values,
-                            x_label='Number of images has rated',
-                            title='How many images each rater has rated?',
-                            show=False)
-
-    def plot_rating_distribution_of_all_attrs(self):
-        """
-        See if there's anything outside the distribution range (0~10)
-
-        :return:
-        """
-        print("Valid range: 0~10")
-        for attr in RatingRecord.ATTRS:
-            frequencies, unique, counts = get_frequencies(data=self.df_all_record[attr].values,
-                                                          return_unique_and_counts=True)
-            min_uniq, max_uniq = min(unique.tolist()), max(unique.tolist())
-            print("Attribute {}: min={}, max={} => {}".format(attr, min_uniq, max_uniq,
-                                                              "VALID" if min_uniq >= 0 and max_uniq <= 10 else "INVALID"))
-            plt.figure(figsize=(10, 2))
-            plt.bar([x[0] for x in frequencies], [x[1] for x in frequencies])
-            plt.show()
-
-    def plot_each_rater_rating_distribution_of_each_attribute(self, save_dir):
-        """
-        Plot each rater's rating distribution of each attribute
-
-        :param save_dir:
-        :return:
-        """
-        for attr in RatingRecord.ALL_ATTRS:
-            # Group and collect as lists
-            # https://stackoverflow.com/questions/22219004/how-to-group-dataframe-rows-into-list-in-pandas-groupby
-            rater_to_attr_set = self.df_attrs[attr].groupby(['name'])[attr].apply(list)
-            rater_num = len(rater_to_attr_set)  # Number of raters
-            rater_hp_distributions = {}
-            for i in range(rater_num):
-                (unique_nums, counts) = np.unique(np.array(rater_to_attr_set.values[i]), return_counts=True)
-                unique_nums, counts = unique_nums.tolist(), counts.tolist()
-                frequencies = {unique_nums[i]: counts[i] for i in range(len(unique_nums))}
-                distribution = []
-                for j in range(0, 11):  # 0~10
-                    distribution.append(0) if j not in frequencies else distribution.append(frequencies[j])
-                rater_hp_distributions[rater_to_attr_set.index[i]] = distribution
-            df = pd.DataFrame(data=rater_hp_distributions)
-            ax = df.plot.bar(stacked=True, figsize=(15, 10), fontsize=20)
-            ax.legend(prop={'size': 20})  # Set legend size
-            title = "Each rater's rating distribution of {}".format(attr)
-            ax.set_title(label=title, fontdict={'fontsize': 30})  # Set title
-            plt.savefig(os.path.join(save_dir, secure_filename(title)))
-
-
 def read_config_and_train(model, img_dir):
     """
     Model here must have method "fit"
@@ -710,7 +634,8 @@ def read_config_and_train(model, img_dir):
     ################
     # Read configure
     ################
-    config = get_config('config.yaml')
+    config_path = 'config.yaml'
+    config = get_config(config_path)
     ####################
     # Variables
     ####################
@@ -789,7 +714,9 @@ def read_config_and_train(model, img_dir):
                                                                                config['confusion_matrix'][
                                                                                    'normalize'] == 'true' else False)
 
-        models[attr] = trained_model
+        models[attr] = MyModel(config_path=config_path,
+                               model=trained_model,
+                               model_path_to_load=None)
         #######################
         # Plot confusion matrix
         #######################
@@ -818,6 +745,151 @@ def read_config_and_train(model, img_dir):
                                            show=True if config['confusion_matrix']['show'] == 'true' else False)
     return models
 
+
+class MyModel:
+    def __init__(self, config_path: str, model=None, model_path_to_load=None):
+        if isinstance(model_path_to_load, str):
+            self.model = self.load_sklearn_model(file_path=model_path_to_load,
+                                                 set_directly_and_not_return=False)
+        else:
+            self.model = model
+        self.config_path = config_path
+
+    def set_model(self, model):
+        self.model = model
+
+    def save_model(self, file_path):
+        joblib.dump(self.model, filename=file_path)
+
+    def load_model(self, file_path, set_directly_and_not_return=True):
+        model = joblib.load(filename=file_path)
+        if set_directly_and_not_return is True:
+            self.model = model
+        else:
+            return model
+
+    def predict_one_image(self,
+                          filename: str,
+                          show_original_img: bool,
+                          show_preprocessed_img: bool):
+        """
+
+        :param filename:
+        :param show_original_img:
+        :param show_preprocessed_img:
+        :return: y_pred
+        """
+        #
+        config = YAML(yaml_path=self.config_path).get_data()
+        target_width_height = (config['input']['input_size']['width'], config['input']['input_size']['height'])
+        edges_setting = EdgesSetting(use=True if config['input']['edges']['use_edges'] else False,
+                                     threshold1=config['input']['edges']['threshold1'],
+                                     threshold2=config['input']['edges']['threshold2'])
+        pil_img_mode = config['input']['pil_img_mode']
+        #
+        img = get_img_data_from_filename(filename=filename,
+                                         target_width_height=target_width_height,
+                                         random_crop_setting=RandomCropSetting(use=False, resize_width_height=(0, 0),
+                                                                               crop_width_height=(0, 0)),
+                                         edges_setting=edges_setting,
+                                         pil_img_mode=pil_img_mode,
+                                         return_mode='PIL_Image',
+                                         train=False)
+        # Show original and preprocessed img
+        if show_original_img is True:
+            Image.open(filename).show()
+        if show_preprocessed_img is True:
+            img.show()
+        # TODO: more preprocessing, not just flatten
+        # Flatten
+        # img_arr_flattened = np.array(sub_arr.flatten() for sub_arr in np.array(img))
+        return self.model.predict(np.array([np.array(img).flatten()]))
+
+
+class RatingRecord:
+    """
+    """
+    ALL_ATTRS = ['hp', 'pa', 'ma', 'sp', 'cr']
+
+    def __init__(self, record_filename, img_dir):
+        """
+        Public members:
+            - record_filename
+            - df_all_record: A Pandas Dataframe
+            - df_attrs: A dict of Pandas Dataframes (key is attribute; value is dataframe.)
+
+        :param record_filename:
+        """
+        self.record_filename = record_filename
+        self.img_dir = img_dir
+        self.df_all_record = self.read_csv_and_add_img_dir_as_prefix()  # Pandas Dataframe
+        self.df_attrs = {attr: self.df_all_record.filter(['name', 'image', attr]) for attr in RatingRecord.ALL_ATTRS}
+
+    def read_csv_and_add_img_dir_as_prefix(self):
+        # Read csv
+        df = pd.read_csv(self.record_filename)
+        # Add prefix to img filename to make completed filename
+        for idx in df.index:
+            df.at[idx, 'image'] = os.path.join(self.img_dir, df.at[idx, 'image'])
+        return df
+
+    def plot_how_many_images_each_rater_has_rated(self):
+        """
+        Plot how many images each rater has rated
+
+        :return:
+        """
+        rater_to_num = self.df_all_record.groupby('name').size()
+        plot_horizontal_bar(rater_to_num.values,
+                            rater_to_num.index.values,
+                            x_label='Number of images has rated',
+                            title='How many images each rater has rated?',
+                            show=False)
+
+    def plot_rating_distribution_of_all_attrs(self):
+        """
+        See if there's anything outside the distribution range (0~10)
+
+        :return:
+        """
+        print("Valid range: 0~10")
+        for attr in RatingRecord.ALL_ATTRS:
+            frequencies, unique, counts = get_frequencies(data=self.df_all_record[attr].values,
+                                                          return_unique_and_counts=True)
+            min_uniq, max_uniq = min(unique.tolist()), max(unique.tolist())
+            print("Attribute {}: min={}, max={} => {}".format(attr, min_uniq, max_uniq,
+                                                              "VALID" if min_uniq >= 0 and max_uniq <= 10 else "INVALID"))
+            plt.figure(figsize=(10, 2))
+            plt.bar([x[0] for x in frequencies], [x[1] for x in frequencies])
+            plt.show()
+
+    def plot_each_rater_rating_distribution_of_each_attribute(self, save_dir):
+        """
+        Plot each rater's rating distribution of each attribute
+
+        :param save_dir:
+        :return:
+        """
+        for attr in RatingRecord.ALL_ATTRS:
+            # Group and collect as lists
+            # https://stackoverflow.com/questions/22219004/how-to-group-dataframe-rows-into-list-in-pandas-groupby
+            rater_to_attr_set = self.df_attrs[attr].groupby(['name'])[attr].apply(list)
+            rater_num = len(rater_to_attr_set)  # Number of raters
+            rater_hp_distributions = {}
+            for i in range(rater_num):
+                (unique_nums, counts) = np.unique(np.array(rater_to_attr_set.values[i]), return_counts=True)
+                unique_nums, counts = unique_nums.tolist(), counts.tolist()
+                frequencies = {unique_nums[i]: counts[i] for i in range(len(unique_nums))}
+                distribution = []
+                for j in range(0, 11):  # 0~10
+                    distribution.append(0) if j not in frequencies else distribution.append(frequencies[j])
+                rater_hp_distributions[rater_to_attr_set.index[i]] = distribution
+            df = pd.DataFrame(data=rater_hp_distributions)
+            ax = df.plot.bar(stacked=True, figsize=(15, 10), fontsize=20)
+            ax.legend(prop={'size': 20})  # Set legend size
+            title = "Each rater's rating distribution of {}".format(attr)
+            ax.set_title(label=title, fontdict={'fontsize': 30})  # Set title
+            plt.savefig(os.path.join(save_dir, secure_filename(title)))
 
 #
 # class MyModelTool:
@@ -916,23 +988,14 @@ def read_config_and_train(model, img_dir):
 # #         raise ValueError('Invalid model type.')
 
 
-clf = RandomForestClassifier(verbose=0, n_jobs=-1, n_estimators=100)
-
-my_model = MyModel(model=clf)
-
-read_config_and_train(model=my_model.model, img_dir='data/images')
-print("Done!!!!!!!!!!!!!")
-# a = MyModelTool()
-# print(a.config)
-# print(a.config['model']['random_forest_clf']['warm_start'])
-# a.train(model=a.get_model())
-# a.train(model=clf)
+############
+# Todos
+############
 
 # TODO: Notice "all" keyword in config. batch_size = x_train_size if self.batch_size == 'all' else self.batch_size
 # TODO: x_filenames & y input shuffle
-# TODO: M0ake full image file path before call functions.
 
-#########
-# Option:
-#########
+################
+# Optional Todo
+################
 # TODO: Make img array custom processing (e.g. not only use flatten())

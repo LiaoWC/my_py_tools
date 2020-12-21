@@ -7,6 +7,7 @@ import numpy as np
 VALID_GET_IMG_INPUT_MODE = ['file_path', 'array', 'PIL_Image']
 VALID_GET_IMG_RETURN_MODE = ['array', 'PIL_Image']
 
+
 # Parameters:
 #     input_mode:
 #         - 'file_path': Get img information by opening the img file.
@@ -38,3 +39,13 @@ def get_img(img,
         return np.array(img)
     elif return_mode == 'PIL_Image':
         return img
+
+
+def remove_transparency(pil_img):
+    # Remove transparency
+    if len(pil_img.split()) > 3:
+        # img.load()  # required for png.split()
+        background = Image.new("RGB", pil_img.size, (255, 255, 255))
+        background.paste(pil_img, mask=pil_img.split()[3])  # 3 is the alpha channel
+        pil_img = background
+    return pil_img
