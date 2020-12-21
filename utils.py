@@ -513,7 +513,7 @@ def get_config(config_filename):
         return YAML(config_filename).get_data()
     except ValueError(
             'Notes that if the config file is not found, you may have not make a new config.yaml'
-            'from config.yaml.example yet.'):
+            'from config.example.yaml yet.'):
         pass
 
 
@@ -1011,3 +1011,5 @@ class RatingRecord:
 # Optional Todo
 ################
 # TODO: Make img array custom processing (e.g. not only use flatten())
+
+# TODO: Rewrite clf, let forest rebuild trees depending on cur all img(containing new imgs)
